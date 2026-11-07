@@ -2,6 +2,8 @@
 
 Learn system design the way you doomscroll: full-screen swipeable cards with memes, animated diagrams and quick quizzes.
 
+**▶ Live: https://malavyaraval.tech/DoomScholar/**. Open it on your phone and add it to your home screen.
+
 - **Feed**: endless vertical scroll through topics (Load Balancers, Redis, Kafka, Design YouTube…). Snap-scrolls one card at a time, like Reels/TikTok.
 - **Card types**: meme formats (classic top/bottom text, "Drake", expanding brain, interviewer chat), concepts, analogies, animated architecture diagrams, comparisons, numbers, code, inline MCQs, TL;DRs.
 - **Quiz tab**: random MCQs by topic or across everything, with explanations, scores, and a "fix my mistakes" mode.
