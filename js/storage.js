@@ -13,6 +13,7 @@ window.Store = (() => {
     xp: 0,
     streak: { count: 0, last: null },
     lastPos: null,     // { t, i }
+    iv: {},            // mock interviews: { id: { done: { phaseId: 1 }, mode: 'practice' | 'read' } }
   });
 
   let d = load();
@@ -96,6 +97,15 @@ window.Store = (() => {
     },
     setBest(scope, pct) {
       if ((d.quiz.best[scope] ?? -1) < pct) { d.quiz.best[scope] = pct; save(); }
+    },
+
+    ivState(id) { const s = (d.iv ||= {}); return (s[id] ||= { done: {}, mode: 'practice' }); },
+    ivSetMode(id, mode) { this.ivState(id).mode = mode; save(); },
+    ivToggleDone(id, phase) {
+      const st = this.ivState(id);
+      if (st.done[phase]) delete st.done[phase]; else { st.done[phase] = 1; touchStreak(); }
+      save();
+      return !!st.done[phase];
     },
 
     // Imported decks are stored separately so they survive a progress reset.

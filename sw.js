@@ -7,7 +7,7 @@ const VERSION = 'v1';
 const CACHE = 'doomscholar-' + VERSION;
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
-  'js/storage.js', 'js/diagram.js', 'js/cards.js', 'js/app.js',
+  'js/storage.js', 'js/diagram.js', 'js/cards.js', 'js/interview.js', 'js/app.js',
   'content/registry.js', 'content/manifest.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];

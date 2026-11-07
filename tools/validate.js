@@ -37,8 +37,9 @@ const RULES = {
 function load() {
   const ctx = { TOPICS: [] };
   ctx.window = ctx;
-  ctx.registerTopic = (t) => { t.__file = ctx.__file; ctx.TOPICS.push(t); };
   vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'content/registry.js'), 'utf8'), ctx); // registerInterview / interviewPhase
+  ctx.registerTopic = (t) => { t.__file = ctx.__file; ctx.TOPICS.push(t); };
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'content/manifest.js'), 'utf8'), ctx);
   const missing = [];
   for (const f of ctx.CONTENT_FILES) {
@@ -47,7 +48,56 @@ function load() {
     ctx.__file = f;
     vm.runInContext(fs.readFileSync(p, 'utf8'), ctx, { filename: p });
   }
-  return { topics: ctx.TOPICS, missing };
+  return { topics: ctx.TOPICS, interviews: ctx.INTERVIEWS || [], missing };
+}
+
+const IV_BLOCKS = ['say', 'think', 'text', 'list', 'table', 'code', 'diagram', 'callout', 'quiz', 'yourturn', 'deep'];
+
+// Mock interviews are long-form, so there are no one-screen limits, just structural checks.
+function checkInterview(iv, topicIds) {
+  const E = [], W = [];
+  const err = (m) => E.push(m);
+  ['title', 'tagline', 'intro'].forEach((k) => { if (!iv[k]) err(`missing ${k}`); });
+  if (topicIds.has(iv.id)) err(`id "${iv.id}" collides with a topic id`);
+  if (iv.related && !topicIds.has(iv.related)) W.push(`related topic "${iv.related}" not found`);
+  if (!/^#[0-9a-f]{6}$/i.test(iv.color || '')) err(`color "${iv.color}" must be a 6-digit hex`);
+  if (!iv.phases.length) err('no phases (call interviewPhase in each phase file)');
+  const phaseIds = new Set();
+  const answers = [];
+  let lastEnd = 0;
+  iv.phases.forEach((p, pi) => {
+    const where = `phase ${pi} (${p.id})`;
+    if (!p.id || !p.title) err(`${where}: needs id and title`);
+    if (phaseIds.has(p.id)) err(`${where}: duplicate phase id`);
+    phaseIds.add(p.id);
+    if (p.start != null) {
+      if (!(p.end > p.start)) err(`${where}: end must be greater than start`);
+      if (p.start < lastEnd) W.push(`${where}: starts before the previous phase ends`);
+      lastEnd = p.end;
+    }
+    const walk = (blocks, w) => (blocks || []).forEach((b, bi) => {
+      const wb = `${w} › ${bi} (${b.type})`;
+      if (!IV_BLOCKS.includes(b.type)) return err(`${wb}: unknown block type. Allowed: ${IV_BLOCKS.join(', ')}`);
+      if (b.type === 'say' && (!['me', 'them'].includes(b.who) || !b.text)) err(`${wb}: needs who: 'me'|'them' and text`);
+      if ((b.type === 'think' || b.type === 'callout') && !b.text) err(`${wb}: missing text`);
+      if (b.type === 'text' && !(b.md || b.text)) err(`${wb}: missing md`);
+      if (b.type === 'list' && !(b.items || []).length) err(`${wb}: empty items`);
+      if (b.type === 'table') {
+        const n = (b.head || []).length;
+        if (!n) err(`${wb}: missing head`);
+        (b.rows || []).forEach((r, ri) => { if (r.length !== n) err(`${wb}: row ${ri} has ${r.length} cells but the header has ${n}`); });
+      }
+      if (b.type === 'code') { if (!b.code) err(`${wb}: missing code`); if (!b.lang) W.push(`${wb}: no lang (no highlighting)`); }
+      if (b.type === 'diagram') Diagram.check(b.diagram).forEach((m) => err(`${wb}: ${m}`));
+      if (b.type === 'quiz') { checkQuestion(b, wb, err); answers.push(b.answer); }
+      if (b.type === 'yourturn' && (!b.prompt || !b.answer)) err(`${wb}: needs prompt and answer`);
+      if (b.type === 'deep') walk(b.blocks, wb);
+      if (b.type !== 'deep' && b.type !== 'code' && (JSON.stringify(b).match(/\*\*/g) || []).length % 2) W.push(`${wb}: unbalanced ** markup`);
+    });
+    walk(p.blocks, where);
+  });
+  if (answers.length >= 4 && new Set(answers).size === 1) W.push(`every checkpoint answer is option ${answers[0]}; vary the position`);
+  return { E, W, questions: answers.length };
 }
 
 function checkQuestion(q, where, err) {
@@ -59,7 +109,7 @@ function checkQuestion(q, where, err) {
 
 function main() {
   const only = process.argv.slice(2);
-  const { topics, missing } = load();
+  const { topics, interviews, missing } = load();
   let errors = 0, warnings = 0;
   const ids = new Set();
   missing.forEach((f) => { console.log(`⚠ manifest lists ${f} but the file doesn't exist yet`); warnings++; });
@@ -107,6 +157,16 @@ function main() {
 
     const status = E.length ? '✖' : W.length ? '⚠' : '✔';
     console.log(`${status} ${t.id} (${(t.cards || []).length} cards, ${answers.length} questions)`);
+    E.forEach((m) => console.log(`    ERROR  ${m}`));
+    W.forEach((m) => console.log(`    warn   ${m}`));
+    errors += E.length; warnings += W.length;
+  }
+
+  const topicIds = new Set(topics.map((t) => t.id));
+  for (const iv of interviews) {
+    if (only.length && !only.includes(iv.id)) continue;
+    const { E, W, questions } = checkInterview(iv, topicIds);
+    console.log(`${E.length ? '✖' : W.length ? '⚠' : '✔'} 🎤 ${iv.id} (${iv.phases.length} phases, ${questions} checkpoint questions)`);
     E.forEach((m) => console.log(`    ERROR  ${m}`));
     W.forEach((m) => console.log(`    warn   ${m}`));
     errors += E.length; warnings += W.length;

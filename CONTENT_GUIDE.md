@@ -98,3 +98,47 @@ node tools/shot.js load-balancer 4 5  # screenshots cards 4 and 5 into shots/
 ```
 
 `validate.js` must report 0 errors. `audit.js` should report no overflowing cards; if one overflows, shorten or split it.
+
+## Mock interviews (long-form)
+
+A mock interview is a scrollable, phase-by-phase walkthrough of a full 45-minute interview. It lives in `content/interviews/<id>/`: one file for the meta, one file per phase, all listed in `content/manifest.js` in order. See `content/interviews/design-load-balancer/` as the reference.
+
+```js
+// 00-intro.js
+registerInterview({
+  id: 'design-load-balancer',      // must not clash with a topic id
+  title: 'Design a Load Balancer',
+  emoji: '🎤', color: '#8b5cf6',
+  related: 'load-balancer',        // that topic's TL;DR card links here
+  duration: 45, level: 'Senior / Staff depth',
+  tagline: 'One line for the Topics tile',
+  intro: 'Markdown shown under the title. Paragraphs split on blank lines.',
+});
+
+// 01-requirements.js
+interviewPhase('design-load-balancer', {
+  id: 'requirements', nav: 'Requirements',   // nav = short chip label
+  time: '0–5', start: 0, end: 5,              // omit all three for bonus phases
+  title: 'Clarify the requirements',
+  goal: 'What a great answer achieves in this phase.',
+  blocks: [ /* see below */ ],
+});
+```
+
+Unlike cards, blocks have **no one-screen limit**; write as much depth as the topic needs. Markdown works in all text (blank line = new paragraph).
+
+| block | fields | notes |
+|---|---|---|
+| `say` | `who: 'them'\|'me', text` | Interviewer / candidate lines. In Practice mode every `me` line is blurred until tapped. |
+| `think` | `text` | The candidate's inner reasoning or meta-advice. |
+| `text` | `md` | Prose. |
+| `list` | `title?, items[], ordered?` | Items are strings or `{title, text}`. |
+| `table` | `title?, head[], rows[][]` | First column renders as row headers. 4+ columns scroll sideways on phones. |
+| `code` | `title, lang, code, caption?` | `lang`: `python`, `go`, `nginx`, `haproxy`, `conf`, `json`, `http`, `text`. Has a Copy button. |
+| `diagram` | `title?, diagram, caption?` | Same diagram format as cards. |
+| `callout` | `tone: 'tip'\|'warn'\|'trap'\|'key', title?, text` | |
+| `quiz` | `q, options, answer, explain` | Checkpoint MCQ; also added to the Quiz tab. |
+| `yourturn` | `prompt, answer, points?[]` | Practice prompt; the model answer is hidden until tapped in Practice mode. |
+| `deep` | `title, blocks[]` | Collapsible "Go deeper" section containing any other blocks. |
+
+Check with `node tools/validate.js <id>` (structure, quiz answers, diagram geometry) and `node tools/audit.js` (nothing may overflow sideways on a phone).

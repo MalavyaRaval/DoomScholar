@@ -34,11 +34,27 @@
         return t;
       });
     App.byId = Object.fromEntries(App.topics.map((t) => [t.id, t]));
+
+    // Mock interviews: number every checkpoint quiz (including ones nested in "Go deeper").
+    App.interviews = (window.INTERVIEWS || []).filter((iv) => iv.id && iv.title && iv.phases && iv.phases.length).map((iv) => {
+      iv.color = HEX.test(iv.color || '') ? iv.color : '#8b5cf6';
+      iv.emoji = iv.emoji || '🎤';
+      iv.questions = [];
+      let n = 0;
+      const walk = (blocks) => (blocks || []).forEach((b) => {
+        if (b.type === 'quiz') { b.key = `${iv.id}#${n++}`; iv.questions.push({ ...b, t: iv.id }); }
+        if (b.type === 'deep') walk(b.blocks);
+      });
+      iv.phases.forEach((p) => walk(p.blocks));
+      return iv;
+    });
+    App.ivById = Object.fromEntries(App.interviews.map((iv) => [iv.id, iv]));
+    App.src = { ...App.ivById, ...App.byId }; // anything that owns quiz questions
   }
 
   function findQuestion(key) {
     const [tid] = key.split('#');
-    return App.byId[tid]?.questions.find((q) => q.key === key);
+    return App.src[tid]?.questions.find((q) => q.key === key);
   }
 
   async function boot() {
@@ -59,16 +75,18 @@
   /* ---------------- routing ---------------- */
 
   const TABS = ['feed', 'topics', 'quiz', 'saved'];
+  const VIEWS = [...TABS, 'interview'];
   let currentTab = null;
 
   function route() {
     const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
+    if (parts[0] === 'interview' && App.ivById[parts[1]]) return show('interview', { id: parts[1] });
     let tab = TABS.includes(parts[0]) ? parts[0] : 'feed';
     if (tab === 'feed' && parts[1] && App.byId[parts[1]]) {
       Feed.start(parts[1], +parts[2] || 0);
       history.replaceState(null, '', '#/feed');
     }
-    if (tab === 'quiz' && parts[1] && (App.byId[parts[1]] || parts[1] === 'mistakes')) {
+    if (tab === 'quiz' && parts[1] && (App.src[parts[1]] || parts[1] === 'mistakes')) {
       history.replaceState(null, '', '#/quiz');
       show('quiz', { pre: parts[1] });
       return;
@@ -78,13 +96,15 @@
 
   function show(tab, opts = {}) {
     currentTab = tab;
-    TABS.forEach((t) => { $('#view-' + t).hidden = t !== tab; });
-    $$('.tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
+    VIEWS.forEach((t) => { $('#view-' + t).hidden = t !== tab; });
+    const navTab = tab === 'interview' ? 'topics' : tab;
+    $$('.tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === navTab));
     document.body.dataset.tab = tab;
     if (tab === 'topics') Topics.render();
     if (tab === 'quiz') Quiz.enter(opts.pre);
     if (tab === 'saved') Saved.render();
     if (tab === 'feed') { Feed.applyScroll(); Feed.refreshSaved(); }
+    if (tab === 'interview') IV.open(opts.id);
   }
 
   function go(tab, sub) { location.hash = '#/' + tab + (sub ? '/' + encodeURIComponent(sub) : ''); }
@@ -216,7 +236,7 @@
     if (!q || Store.answerOf(key) != null) return;
     const correct = n === q.answer;
     const xp = Store.record(key, n, correct, true);
-    const card = btn.closest('.card');
+    const card = btn.closest('.card, .iv-quiz');
     $$('.opt', card).forEach((o, k) => {
       o.disabled = true;
       o.classList.add(k === q.answer ? 'right' : k === n ? 'wrong' : 'dim');
@@ -339,6 +359,18 @@
             <button class="btn primary" data-a="continue">▶ Keep scrolling</button>
             <button class="btn ghost" data-a="random">🎲 Surprise me</button>
           </div>
+          ${App.interviews.length ? `<h3 class="sec">🎤 Mock interviews</h3><div class="tiles">${App.interviews.map((iv) => {
+            const st = Store.ivState(iv.id);
+            const done = iv.phases.filter((p) => st.done[p.id]).length;
+            return `
+            <a class="tile iv-tile" href="#/interview/${esc(iv.id)}" style="--accent:${iv.color}">
+              <span class="tile-emoji">${esc(iv.emoji)}</span>
+              <span class="tile-t">${esc(iv.title)}</span>
+              <span class="tile-x">${esc(iv.tagline || '')}</span>
+              <span class="bar"><i style="width:${Math.round((done / iv.phases.length) * 100)}%"></i></span>
+              <span class="tile-m">${esc(iv.duration || 45)} min · ${done}/${iv.phases.length} phases · ${iv.questions.length} checkpoints</span>
+            </a>`;
+          }).join('')}</div>` : ''}
           ${cats.map((c) => `<h3 class="sec">${esc(c)}</h3><div class="tiles">${App.topics.filter((t) => t.category === c).map(tile).join('')}</div>`).join('')}
           <h3 class="sec">Learn anything</h3>
           <div class="tiles">
@@ -401,7 +433,7 @@
     setup() {
       this.s = null;
       const st = Store.get();
-      const withQ = App.topics.filter((t) => t.questions.length);
+      const withQ = [...App.interviews, ...App.topics].filter((t) => t.questions.length);
       const totalQ = withQ.reduce((a, t) => a + t.questions.length, 0);
       const acc = st.quiz.total ? Math.round((st.quiz.right / st.quiz.total) * 100) + '%' : '–';
       const mistakes = st.mistakes.filter(findQuestion).length;
@@ -434,8 +466,8 @@
     start(mode) {
       let pool;
       if (mode === 'mistakes') pool = Store.get().mistakes.map(findQuestion).filter(Boolean);
-      else if (this.sel === 'all' || !App.byId[this.sel]) { this.sel = 'all'; pool = App.topics.flatMap((t) => t.questions); }
-      else pool = App.byId[this.sel].questions;
+      else if (this.sel === 'all' || !App.src[this.sel]) { this.sel = 'all'; pool = [...App.topics, ...App.interviews].flatMap((t) => t.questions); }
+      else pool = App.src[this.sel].questions;
       if (!pool.length) { toast('No questions here yet'); return this.setup(); }
       const qs = shuffle(pool).slice(0, mode === 'mistakes' ? 20 : this.count).map((q) => ({ ...q, order: shuffle(q.options.map((_, i) => i)) }));
       this.s = { qs, idx: 0, right: 0, mode, scope: mode === 'mistakes' ? 'mistakes' : this.sel, done: false, answered: false };
@@ -443,7 +475,7 @@
     },
 
     renderQ() {
-      const s = this.s, q = s.qs[s.idx], t = App.byId[q.t];
+      const s = this.s, q = s.qs[s.idx], t = App.src[q.t];
       this.el.innerHTML = `
         <div class="page-in quiz-run" style="--accent:${t.color}">
           <div class="qbar"><i style="width:${(s.idx / s.qs.length) * 100}%"></i></div>
@@ -516,6 +548,88 @@
         if (r === 'setup') this.setup();
         if (r === 'feed') go('feed');
       };
+    },
+  };
+
+  /* ---------------- mock interview view ---------------- */
+
+  const IV = {
+    id: null, t0: null, tick: null, io: null,
+    get el() { return $('#view-interview'); },
+
+    open(id) {
+      const fresh = this.id !== id;
+      this.id = id;
+      this.render();
+      if (fresh) this.el.scrollTop = 0;
+    },
+
+    render() {
+      const iv = App.ivById[this.id];
+      const keep = this.el.scrollTop;
+      this.el.innerHTML = Interview.render(iv, Store.ivState(iv.id));
+      this.el.scrollTop = keep;
+      this.el.onclick = (e) => this.click(e);
+      this.el.onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-iv="reveal"]')) { e.preventDefault(); this.click(e); } };
+      this.updateTimer();
+      // Highlight the phase you're reading in the sticky nav.
+      this.io?.disconnect();
+      this.io = new IntersectionObserver((es) => es.forEach((en) => {
+        if (!en.isIntersecting) return;
+        const b = $(`.iv-nav [data-p="${CSS.escape(en.target.dataset.p)}"]`, this.el);
+        $$('.iv-nav .here', this.el).forEach((x) => x.classList.remove('here'));
+        if (b) {
+          b.classList.add('here');
+          // Scroll only the chip strip; scrollIntoView would also scroll the page and cancel a jump in progress.
+          const nav = b.parentElement;
+          nav.scrollTo({ left: b.offsetLeft - nav.clientWidth / 2 + b.offsetWidth / 2, behavior: 'smooth' });
+        }
+      }), { root: this.el, rootMargin: '-35% 0px -60% 0px' });
+      $$('.iv-phase', this.el).forEach((s) => this.io.observe(s));
+    },
+
+    click(e) {
+      const t = e.target.closest('[data-iv]');
+      if (!t) return;
+      const iv = App.ivById[this.id];
+      const act = t.dataset.iv;
+      if (act === 'reveal' && t.classList.contains('hide')) t.classList.remove('hide');
+      if (act === 'mode') { Store.ivSetMode(iv.id, t.dataset.m); this.render(); toast(t.dataset.m === 'read' ? '👀 All answers shown' : '🙈 Answers hidden: answer first, then tap'); }
+      if (act === 'done') {
+        const on = Store.ivToggleDone(iv.id, t.dataset.p);
+        if (on) { Store.get().xp += 25; updateStats(true); toast('Phase done +25 XP'); }
+        this.render();
+      }
+      if (act === 'jump') {
+        const sec = $(`#ph-${CSS.escape(t.dataset.p)}`, this.el);
+        const bar = $('.iv-bar', this.el);
+        // land the phase heading just below the sticky bar (its stuck offset + its height)
+        const stuckBottom = (parseFloat(getComputedStyle(bar).top) || 0) + bar.offsetHeight;
+        if (sec) this.el.scrollTo({ top: sec.offsetTop - stuckBottom - 6, behavior: 'smooth' });
+      }
+      if (act === 'copy') {
+        const code = t.closest('.iv-code').querySelector('code').textContent;
+        navigator.clipboard?.writeText(code).then(() => toast('Code copied 📋'), () => toast('Copy failed'));
+      }
+      if (act === 'timer') {
+        if (this.t0) { if (confirm('Stop the 45-minute timer?')) { clearInterval(this.tick); this.t0 = null; this.tick = null; } }
+        else { this.t0 = Date.now(); this.tick = setInterval(() => this.updateTimer(), 1000); toast('⏱ Timer started. Follow the phase it highlights'); }
+        this.updateTimer();
+      }
+    },
+
+    // While the timer runs, show elapsed time and the phase you *should* be on.
+    updateTimer() {
+      const btn = $('.iv-timer', this.el);
+      if (!btn) return;
+      if (!this.t0) { btn.textContent = '⏱ Start 45:00'; btn.classList.remove('on', 'late'); return; }
+      const iv = App.ivById[this.id];
+      const sec = Math.floor((Date.now() - this.t0) / 1000), min = sec / 60;
+      const ph = iv.phases.find((p) => p.start != null && min >= p.start && min < p.end);
+      btn.textContent = `⏱ ${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}${ph ? ' · ' + (ph.nav || ph.title) : min >= 45 ? " · Time's up" : ''}`;
+      btn.classList.add('on');
+      btn.classList.toggle('late', min >= 45);
+      $$('.iv-nav button', this.el).forEach((b) => b.classList.toggle('now', !!ph && b.dataset.p === ph.id));
     },
   };
 
@@ -661,6 +775,20 @@ TOPIC: `;
       });
     }
     host.remove();
+    // Long-form interviews: nothing may stick out sideways (code and tables scroll inside their own boxes).
+    out.interviews = [];
+    for (const iv of App.interviews) {
+      const page = document.createElement('section');
+      page.className = 'view page iv-page';
+      page.style.cssText = 'position:fixed;inset:0;max-width:480px';
+      document.body.appendChild(page);
+      page.innerHTML = Interview.render(iv, { done: {}, mode: 'read' });
+      $$('details', page).forEach((d) => { d.open = true; });
+      const edge = page.getBoundingClientRect().right;
+      const wide = $$('*', page).filter((n) => !n.closest('pre, .tbl-scroll, .iv-nav') && n.getBoundingClientRect().right > edge + 1);
+      out.interviews.push({ id: iv.id, overflowPx: page.scrollWidth - page.clientWidth, offenders: wide.slice(0, 5).map((n) => `${n.tagName.toLowerCase()}.${n.className}: ${n.textContent.slice(0, 40)}`) });
+      page.remove();
+    }
     const pre = document.createElement('pre');
     pre.id = 'audit';
     pre.textContent = JSON.stringify(out);

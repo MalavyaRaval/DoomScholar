@@ -29,4 +29,18 @@ window.CONTENT_FILES = [
   'designs/twitter-feed.js',
   'designs/whatsapp.js',
   'designs/uber.js',
+
+  // Mock interviews (long-form, one file per phase, in order)
+  'interviews/design-load-balancer/00-intro.js',
+  'interviews/design-load-balancer/01-requirements.js',
+  'interviews/design-load-balancer/02-estimates.js',
+  'interviews/design-load-balancer/03-high-level.js',
+  'interviews/design-load-balancer/04-lb-types.js',
+  'interviews/design-load-balancer/05-algorithms.js',
+  'interviews/design-load-balancer/06-health-checks.js',
+  'interviews/design-load-balancer/07-ha-scaling.js',
+  'interviews/design-load-balancer/08-deep-dives.js',
+  'interviews/design-load-balancer/09-wrap-up.js',
+  'interviews/design-load-balancer/10-curveballs.js',
+  'interviews/design-load-balancer/11-cheatsheet.js',
 ];

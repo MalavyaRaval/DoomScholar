@@ -6,6 +6,7 @@ Learn system design the way you doomscroll: full-screen swipeable cards with mem
 
 - **Feed**: endless vertical scroll through topics (Load Balancers, Redis, Kafka, Design YouTube…). Snap-scrolls one card at a time, like Reels/TikTok.
 - **Card types**: meme formats (classic top/bottom text, "Drake", expanding brain, interviewer chat), concepts, analogies, animated architecture diagrams, comparisons, numbers, code, inline MCQs, TL;DRs.
+- **Mock interviews**: a full 45-minute *Design a Load Balancer* interview, phase by phase: the interviewer/candidate conversation, working Python code, real NGINX/HAProxy/keepalived configs, diagrams, "go deeper" sections and curveball questions. **Practice mode** hides the model answers until you've said yours out loud, and a **45:00 timer** tells you which phase you should be on.
 - **Quiz tab**: random MCQs by topic or across everything, with explanations, scores, and a "fix my mistakes" mode.
 - **Saved**: double-tap any card (or hit ❤️) to save it for revision.
 - **XP + streaks**: progress is stored in your browser (localStorage), with no account or server.
@@ -80,6 +81,8 @@ js/diagram.js           JSON → animated SVG architecture diagrams
 js/storage.js           progress / XP / streak in localStorage
 content/manifest.js     list + order of topic files
 content/**/*.js         the topics
+content/interviews/     mock interviews (one folder each, one file per phase)
+js/interview.js         renders mock interviews
 sw.js                   offline support (network-first cache)
 tools/                  local dev server, validator, phone-size audit, screenshots
 ```

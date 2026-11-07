@@ -123,33 +123,40 @@ window.Cards = (() => {
       <div${A('label', 0)}>${esc(c.label || '💡 Interview tip')}</div>
       <blockquote${A('tip', 1)}>${md(c.text)}</blockquote>`,
 
-    quiz: (c, t, i) => {
-      const key = `${t.id}#${i}`;
-      const pick = Store.answerOf(key);
-      const done = pick != null;
-      const right = done && pick === c.answer;
+    quiz: (c, t, i) => quizBlock(`${t.id}#${i}`, c, '🧠 Quick check', true),
+
+    tldr: (c, t) => {
+      const iv = (window.INTERVIEWS || []).find((x) => x.related === t.id);
       return `
-        <div${A('label', 0)}>🧠 Quick check</div>
-        <h2${A('q', 1)}>${md(c.q)}</h2>
+      <div${A('label', 0)}>⚡ TL;DR</div>
+      <h2${A('', 1)}>${md(c.title || t.title + ' in 10 seconds')}</h2>
+      <ul class="checks">${(c.points || []).map((p, i) => `<li${A('', i + 2)}>${md(p)}</li>`).join('')}</ul>
+      <div${A('cta', (c.points || []).length + 2)}>
+        <button class="btn primary" data-act="quiz-topic" data-t="${esc(t.id)}">🧠 Quiz me on this</button>
+        ${iv ? `<a class="btn warn" href="#/interview/${esc(iv.id)}">🎤 Mock interview</a>` : ''}
+        <button class="btn ghost" data-act="next">Next topic ↓</button>
+      </div>`;
+    },
+  };
+
+  // Shared by quiz cards and interview checkpoints. Answers persist via Store.answerOf(key).
+  function quizBlock(key, c, label, anim) {
+    const a = (cls, i) => (anim ? A(cls, i) : ` class="${cls}"`);
+    const pick = Store.answerOf(key);
+    const done = pick != null;
+    const right = done && pick === c.answer;
+    return `
+        <div${a('label', 0)}>${label}</div>
+        <h2${a('q', 1)}>${md(c.q)}</h2>
         <div class="opts">${(c.options || []).map((o, n) => `
-          <button${A('opt' + (done ? (n === c.answer ? ' right' : n === pick ? ' wrong' : ' dim') : ''), n + 2)} data-act="opt" data-k="${esc(key)}" data-n="${n}"${done ? ' disabled' : ''}>
+          <button${a('opt' + (done ? (n === c.answer ? ' right' : n === pick ? ' wrong' : ' dim') : ''), n + 2)} data-act="opt" data-k="${esc(key)}" data-n="${n}"${done ? ' disabled' : ''}>
             <span class="opt-l">${LETTERS[n]}</span><span>${md(o)}</span>
           </button>`).join('')}
         </div>
         <div class="explain${done ? ' show' : ''}">
           <b class="verdict">${done ? (right ? '✅ Nailed it.' : '❌ Not quite.') : ''}</b> ${md(c.explain || '')}
         </div>`;
-    },
-
-    tldr: (c, t) => `
-      <div${A('label', 0)}>⚡ TL;DR</div>
-      <h2${A('', 1)}>${md(c.title || t.title + ' in 10 seconds')}</h2>
-      <ul class="checks">${(c.points || []).map((p, i) => `<li${A('', i + 2)}>${md(p)}</li>`).join('')}</ul>
-      <div${A('cta', (c.points || []).length + 2)}>
-        <button class="btn primary" data-act="quiz-topic" data-t="${esc(t.id)}">🧠 Quiz me on this</button>
-        <button class="btn ghost" data-act="next">Next topic ↓</button>
-      </div>`,
-  };
+  }
 
   function foot(t, i) {
     const key = `${t.id}#${i}`;
@@ -189,5 +196,5 @@ window.Cards = (() => {
       </article>`;
   }
 
-  return { render, loopCard, md, esc, ICON, types: Object.keys(R), LETTERS };
+  return { render, loopCard, quizBlock, md, esc, ICON, types: Object.keys(R), LETTERS };
 })();

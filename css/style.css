@@ -371,6 +371,122 @@ main, .view { position: absolute; inset: 0; }
 .empty { align-items: center; justify-content: center; text-align: center; }
 .empty p { color: var(--muted); line-height: 1.5; }
 
+/* ---------- mock interview (long-form) ---------- */
+.iv-tile { grid-column: 1 / -1; min-height: 0; text-decoration: none; color: inherit; }
+/* No top padding on the scroller itself: browsers disagree on whether sticky offsets count it. */
+.iv-page { padding-top: 0; padding-left: 16px; padding-right: 16px; }
+.iv-wrap { display: flex; flex-direction: column; gap: 14px; padding-top: calc(var(--top) + 6px); padding-bottom: 20px; animation: rise .35s; }
+.iv-back { align-self: flex-start; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
+.iv-hero { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 4px; }
+.iv-hero .hook-emoji { font-size: 60px; }
+.iv-hero h1 { font-family: var(--display); font-size: 32px; line-height: 1.08; letter-spacing: -.02em; }
+.iv-intro p, .iv-text p { font-size: 16px; line-height: 1.6; color: #d9d9e6; }
+.iv-intro p + p, .iv-text p + p { margin-top: 10px; }
+
+.iv-bar {
+  position: sticky; top: calc(var(--top) - 4px); z-index: 5; margin: 0 -16px; padding: 10px 16px 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(7, 7, 12, .93); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.iv-bar-row { display: flex; gap: 8px; align-items: center; }
+.seg2 { display: flex; padding: 3px; gap: 3px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.seg2 button { padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.seg2 button.on { background: rgba(255, 255, 255, .13); color: var(--text); }
+.iv-timer { flex: 1; min-width: 0; padding: 9px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iv-timer.on { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: color-mix(in srgb, var(--accent) 45%, #fff); }
+.iv-timer.late { border-color: var(--bad); color: #fda4af; }
+.iv-nav { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.iv-nav::-webkit-scrollbar { display: none; }
+.iv-nav button { flex: none; padding: 6px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--muted); background: var(--surface); border: 1px solid var(--border); white-space: nowrap; }
+.iv-nav button.done { color: #86efac; border-color: rgba(34, 197, 94, .35); }
+.iv-nav button.here { color: var(--text); border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+.iv-nav button.now { box-shadow: 0 0 0 2px #f59e0b; }
+
+.iv-phase { display: flex; flex-direction: column; gap: 14px; padding: 20px 0 8px; border-top: 1px solid var(--border); scroll-margin-top: 140px; }
+.iv-ph-head { display: flex; flex-direction: column; gap: 6px; }
+.iv-time { align-self: flex-start; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--accent) 50%, #fff); background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); padding: 5px 10px; border-radius: 999px; }
+.iv-ph-head h2 { font-family: var(--display); font-size: 25px; line-height: 1.15; letter-spacing: -.015em; }
+.iv-goal { font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+
+.iv-say { display: flex; flex-direction: column; gap: 4px; }
+.iv-say.me { align-items: flex-end; }
+.iv-say .who { font-size: 12px; font-weight: 700; color: var(--dim); padding: 0 6px; }
+.iv-say .bub { max-width: 94%; font-size: 15.5px; line-height: 1.5; padding: 10px 14px; }
+.iv-say .bub p + p { margin-top: 8px; }
+.iv-say .bub.me { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, #000), color-mix(in srgb, var(--accent) 45%, #000)); }
+
+.rv { position: relative; cursor: pointer; }
+.rv-cover { display: none; }
+.rv.hide { min-height: 70px; }
+/* Blur look via transparent text + blurred shadow. A CSS filter would promote each of these to its own
+   GPU layer (dozens per page): slow to scroll on phones, and it can paint over the sticky top bar. */
+.rv.hide .rv-body, .rv.hide .rv-body * { color: transparent !important; text-shadow: 0 0 8px rgba(255, 255, 255, .5); background: none !important; border-color: transparent !important; }
+.rv.hide .rv-body { user-select: none; pointer-events: none; }
+.rv.hide .rv-cover { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; padding: 10px; text-align: center; font-size: 13.5px; font-weight: 700; color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, .8); }
+.rv:not(.hide) .rv-body { animation: rise .3s; }
+
+.iv-think { display: flex; gap: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, .03); border: 1px dashed rgba(255, 255, 255, .16); }
+.iv-think > span { font-size: 18px; line-height: 1.3; }
+.iv-think p { font-size: 14.5px; line-height: 1.5; color: var(--muted); font-style: italic; }
+
+.iv-list h4, .iv-table h4, .iv-dia h4 { font-family: var(--display); font-size: 17px; margin: 0 0 8px; }
+.iv-list ul, .iv-list ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.iv-list li { font-size: 15.5px; line-height: 1.5; color: #dcdce8; }
+.iv-list li::marker { color: color-mix(in srgb, var(--accent) 60%, #fff); font-weight: 700; }
+
+.tbl-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; }
+.iv-table table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.4; }
+.iv-table table[data-cols="4"], .iv-table table[data-cols="5"] { min-width: 600px; } /* only wide tables scroll sideways */
+body[data-tab="interview"] .topbar { background: var(--bg); }
+.iv-table th, .iv-table td { padding: 9px 11px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.iv-table thead th { position: sticky; top: 0; background: var(--surface2); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.iv-table tbody th { color: var(--text); font-weight: 700; background: rgba(255, 255, 255, .025); }
+.iv-table td { color: #d6d6e4; }
+.iv-table tr:last-child > * { border-bottom: 0; }
+
+.iv-code { margin: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0b0b12; }
+.iv-code figcaption { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; }
+.iv-code figcaption .t { flex: 1; min-width: 0; }
+.iv-code .lang { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--dim); }
+.iv-code .copy { padding: 4px 9px; border-radius: 8px; font-size: 12px; font-weight: 700; background: rgba(255, 255, 255, .08); }
+.iv-code pre { margin: 0; padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: #e4e4ef; }
+.iv-code pre code { background: none; padding: 0; font-size: inherit; }
+.iv-code .cm { color: #7c7c96; font-style: italic; }
+.iv-code .st { color: #a5d6a7; }
+.iv-code .nu { color: #fbbf77; }
+.iv-code .kw { color: #c4b5fd; font-weight: 600; }
+.iv-code .cap, .iv-dia .cap { padding: 0 12px 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.iv-dia { margin: 0; }
+.iv-dia .cap { padding: 8px 2px 0; }
+
+.iv-callout { padding: 12px 14px; border-radius: 14px; border: 1px solid; display: flex; flex-direction: column; gap: 6px; }
+.iv-callout > b { font-size: 14px; }
+.iv-callout p { font-size: 15px; line-height: 1.5; color: #e2e2ec; }
+.iv-callout.tone-tip { background: rgba(56, 189, 248, .08); border-color: rgba(56, 189, 248, .35); }
+.iv-callout.tone-warn { background: rgba(245, 158, 11, .08); border-color: rgba(245, 158, 11, .4); }
+.iv-callout.tone-trap { background: rgba(244, 63, 94, .08); border-color: rgba(244, 63, 94, .4); }
+.iv-callout.tone-key { background: rgba(34, 197, 94, .08); border-color: rgba(34, 197, 94, .4); }
+
+.iv-quiz { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.iv-quiz h2.q { font-family: var(--display); font-size: 18.5px; line-height: 1.3; }
+
+.iv-yt { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; background: rgba(245, 158, 11, .06); border: 1px solid rgba(245, 158, 11, .35); }
+.iv-yt .label { color: #fcd34d; background: rgba(245, 158, 11, .14); border-color: rgba(245, 158, 11, .4); }
+.yt-q { font-family: var(--display); font-size: 17.5px; line-height: 1.35; font-weight: 600; }
+.yt-a { padding: 12px; border-radius: 12px; background: rgba(0, 0, 0, .25); }
+.yt-a p, .yt-a li { font-size: 15px; line-height: 1.55; color: #e2e2ec; }
+.yt-a p + p { margin-top: 8px; }
+.yt-a ul { margin: 8px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+.iv-deep { border-radius: 14px; border: 1px solid var(--border); background: rgba(255, 255, 255, .025); }
+.iv-deep summary { cursor: pointer; padding: 12px 14px; font-weight: 700; font-size: 15px; list-style: none; display: flex; gap: 6px; align-items: center; }
+.iv-deep summary::-webkit-details-marker { display: none; }
+.iv-deep summary::after { content: '▸'; margin-left: auto; color: var(--muted); transition: transform .2s; }
+.iv-deep[open] summary::after { transform: rotate(90deg); }
+.iv-deep-body { display: flex; flex-direction: column; gap: 14px; padding: 0 12px 14px; }
+.iv-done { margin-top: 4px; }
+
 /* modal sheet */
 #modal { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .6); animation: fade .2s; }
 #modal[hidden] { display: none; }
@@ -434,6 +550,8 @@ textarea { width: 100%; min-height: 160px; padding: 12px; resize: vertical; back
   .bub { max-width: 90%; padding: 6px 11px; font-size: 13.5px; line-height: 1.32; }
   .cmp li { font-size: 13px; }
   .cmp-head span { font-size: 22px; }
+  .cta { gap: 8px; }
+  .cta .btn { padding: 9px 12px; font-size: 14px; }
   .tip { font-size: 19px; }
 }
 
