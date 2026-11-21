@@ -25,10 +25,11 @@ const { launch } = require('./chrome');
       overflow.forEach((o) => console.log(`  ${o.topic} #${o.card} (${o.type}) is ${o.overflowPx}px too tall`));
     }
     diagrams.forEach((d) => console.log(`  diagram ${d.topic} #${d.card}: ${d.issue}`));
-    const ivBad = (out.interviews || []).filter((iv) => iv.overflowPx > 1 || iv.offenders.length);
-    (out.interviews || []).forEach((iv) => {
+    const pages = [...(out.interviews || []).map((x) => ({ ...x, kind: 'interview' })), ...(out.deeps || []).map((x) => ({ ...x, kind: 'deep dive' }))];
+    const ivBad = pages.filter((iv) => iv.overflowPx > 1 || iv.offenders.length);
+    pages.forEach((iv) => {
       const bad = iv.overflowPx > 1 || iv.offenders.length;
-      console.log(`${bad ? '✖' : '✔'} interview ${iv.id}: ${bad ? `sticks out ${iv.overflowPx}px sideways` : 'nothing overflows sideways'}`);
+      console.log(`${bad ? '✖' : '✔'} ${iv.kind} ${iv.id}: ${bad ? `sticks out ${iv.overflowPx}px sideways` : 'nothing overflows sideways'}`);
       iv.offenders.forEach((o) => console.log(`    ${o}`));
     });
     if (overflow.length || diagrams.length || ivBad.length || chrome.errors.length) process.exitCode = 1;

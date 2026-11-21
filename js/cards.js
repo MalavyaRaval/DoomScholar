@@ -13,8 +13,9 @@ window.Cards = (() => {
     h = h.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<i>$2</i>');
     return h.replace(/\n/g, '<br>');
   }
+  const paras = (s) => String(s || '').split(/\n{2,}/).map((p) => `<p>${md(p)}</p>`).join('');
 
-  const A = (cls, i) => ` class="${cls} anim" style="--d:${i}"`;
+  const A =(cls, i) => ` class="${cls} anim" style="--d:${i}"`;
   const LETTERS = 'ABCDEFGH';
 
   const ICON = {
@@ -123,17 +124,27 @@ window.Cards = (() => {
       <div${A('label', 0)}>${esc(c.label || '💡 Interview tip')}</div>
       <blockquote${A('tip', 1)}>${md(c.text)}</blockquote>`,
 
-    quiz: (c, t, i) => quizBlock(`${t.id}#${i}`, c, '🧠 Quick check', true),
+    // A paragraph to actually read. Deep dives feed one per section into the feed (with a link back).
+    read: (c) => `
+      <div${A('label', 0)}>${esc(c.label || '📖 Deep read')}</div>
+      <h2${A('', 1)}>${c.emoji ? `${esc(c.emoji)} ` : ''}${md(c.title)}</h2>
+      <div${A('read-body', 2)}>${paras(c.text)}</div>
+      ${c.href ? `<a${A('read-more', 3)} href="${esc(c.href)}">${esc(c.more || 'Read the full part')} →</a>` : ''}`,
+
+    // c.key: a question owned by a deep dive, so answering here also answers it there.
+    quiz: (c, t, i) => quizBlock(c.key || `${t.id}#${i}`, c, '🧠 Quick check', true),
 
     tldr: (c, t) => {
       const iv = (window.INTERVIEWS || []).find((x) => x.related === t.id);
+      const dd = t.deep || (window.DEEPDIVES || []).find((x) => x.related === t.id)?.id;
       return `
       <div${A('label', 0)}>⚡ TL;DR</div>
       <h2${A('', 1)}>${md(c.title || t.title + ' in 10 seconds')}</h2>
       <ul class="checks">${(c.points || []).map((p, i) => `<li${A('', i + 2)}>${md(p)}</li>`).join('')}</ul>
       <div${A('cta', (c.points || []).length + 2)}>
-        <button class="btn primary" data-act="quiz-topic" data-t="${esc(t.id)}">🧠 Quiz me on this</button>
-        ${iv ? `<a class="btn warn" href="#/interview/${esc(iv.id)}">🎤 Mock interview</a>` : ''}
+        <button class="btn primary" data-act="quiz-topic" data-t="${esc(t.quizId || t.id)}">🧠 Quiz me on this</button>
+        ${dd ? `<a class="btn deep" href="#/deep/${esc(dd)}">📖 ${t.deep ? 'Read the full deep dive' : 'Deep dive'}</a>` : ''}
+        ${iv ?`<a class="btn warn" href="#/interview/${esc(iv.id)}">🎤 Mock interview</a>` : ''}
         <button class="btn ghost" data-act="next">Next topic ↓</button>
       </div>`;
     },
@@ -196,5 +207,5 @@ window.Cards = (() => {
       </article>`;
   }
 
-  return { render, loopCard, quizBlock, md, esc, ICON, types: Object.keys(R), LETTERS };
+  return { render, loopCard, quizBlock, md, esc, paras, ICON, types: Object.keys(R), LETTERS };
 })();

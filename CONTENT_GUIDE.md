@@ -41,6 +41,7 @@ Text fields support a tiny markdown: `**bold**`, `*italic*`, `` `code` ``, `==hi
 | `code` | `title, code, caption?` | Commands / pseudo-code. ≤ 12 lines, ≤ 38 chars per line. Lines starting with `#`, `//` or `--` render as comments. |
 | `tip` | `text, label?` | Interview tip or hot take. ≤ 35 words. Default label is "💡 Interview tip". |
 | `quiz` | `q, options[3–4], answer, explain` | Inline MCQ. `answer` is the 0-based index; **vary the position**. Options ≤ 60 chars. explain ≤ 35 words. |
+| `read` | `title, text, emoji?, label?, href?, more?` | A paragraph to actually read (≤ 100 words; blank line = new paragraph). Deep dives generate these for the feed automatically; `href` adds a "Read the full part →" link. |
 | `tldr` | `points[3–5], title?` | **Last card of every topic.** Recap + buttons for quiz/next topic. |
 
 Extra questions in `quiz: []` use the same `{q, options, answer, explain}` shape.
@@ -142,3 +143,53 @@ Unlike cards, blocks have **no one-screen limit**; write as much depth as the to
 | `deep` | `title, blocks[]` | Collapsible "Go deeper" section containing any other blocks. |
 
 Check with `node tools/validate.js <id>` (structure, quiz answers, diagram geometry) and `node tools/audit.js` (nothing may overflow sideways on a phone).
+
+## Deep dives (long-form reading)
+
+A deep dive is an article for readers who want the full story: how a system works inside, where it runs in production, trade-offs and failure modes. It opens at `#/deep/<id>`, shows up under **📖 Deep dives** in the Topics tab, and its checkpoint questions join the Quiz tab.
+
+It also feeds the doomscroll. Each part's `card` paragraph becomes a swipeable `read` card, and the deep dive's parts play as a "Deep read" deck right after its `related` topic in the feed: hook → (part paragraph + that part's first quiz) × parts → recap. Readers meet each idea three times: as a short card, as a paragraph, and in full.
+
+A deep dive is one file (`content/deep-dives/<id>.js`) or a folder with one file per part (`content/deep-dives/<id>/00-intro.js`, `01-….js`). List every file in `content/manifest.js`. See `content/deep-dives/l4-vs-l7/` as the reference.
+
+```js
+registerDeepDive({
+  id: 'l4-vs-l7',                 // must not clash with a topic or interview id
+  title: 'L4 vs L7 Load Balancing',
+  short: 'L4 vs L7',              // footer chip in the feed (≤ 18 chars)
+  emoji: '🔬', color: '#6366f1',
+  related: 'load-balancer',       // its deck plays after this topic; that topic's TL;DR links here
+  tagline: 'One line for the Topics tile',
+  hook: 'Cover text of the feed deck (≤ 30 words).',
+  intro: 'Markdown under the title. Blank line = new paragraph.',
+  recap: ['3–5 points, each ≤ 16 words', '…'],   // the feed deck's closing TL;DR
+  // sections: [...]               // optional: parts inline instead of deepSection calls
+});
+
+deepSection('l4-vs-l7', {
+  id: 'l4', nav: 'How L4 works',  // nav = short chip label (≤ 24 chars)
+  title: 'How an L4 load balancer works, packet by packet',
+  goal: 'What the reader can do after this part.',
+  card: { emoji: '📦', text: 'A self-contained 80–100 word paragraph. Plays in the feed.' },
+  blocks: [ /* any mock-interview block, plus the ones below */ ],
+});
+```
+
+Rules of thumb:
+- 7–9 parts, each a few minutes of reading. Paragraphs are welcome here; depth is the point. Repeating a key idea in a later part is fine, because repetition is how it sticks.
+- The **first top-level `quiz`** of each part also plays in the feed right after that part's card, so make it answerable from the card paragraph alone. Two quizzes per part; vary the answer positions.
+- Include an "in the wild" part (a `wild` carousel of real companies and systems) and finish with an "Explain it back" part (`flashcards`).
+- Only state facts, dates and defaults you're sure of. When in doubt, leave it out.
+
+Deep dives can use every mock-interview block (`text`, `list`, `table`, `code` with `lang` such as `python`, `yaml`, `nginx`, `callout`, `diagram`, `quiz`, `yourturn`, `deep`, `say`, `think`). `yourturn` answers are always hidden until tapped, which makes them good "diagnose it" prompts. These blocks are deep-dive only:
+
+| block | fields | notes |
+|---|---|---|
+| `stepper` | `title?, diagram?, steps[{title, text, focus?[], diagram?}]` | One step at a time with Back/Next. `focus` lists node ids and `"from>to"` edge ids of the shared `diagram` to highlight; everything else dims. A step's own `diagram` replaces the shared one. |
+| `layers` | `title?, layers[{tag, name, fields[]}], views[{label, sees[tags], text}]` | Nested boxes (the first layer wraps the rest), like packet headers. Each view button blurs the layers its reader can't see. |
+| `tabs` | `title?, tabs[{label, blocks[]}]` | Switchable panels of any blocks. |
+| `wild` | `title?, items[{who, what?, emoji?, tags?[], text}]` | Sideways-swipe carousel of real-world usage. |
+| `flashcards` | `title?, text?, cards[{q, a}]` | Tap to flip. Use for active recall at the end. |
+| `stats` | `title?, stats[{value, label}], caption?` | Big numbers (value ≤ 9 chars). |
+
+Check with `node tools/validate.js <id>` (structure, card length, quiz answers, diagram geometry, stepper focus ids) and `node tools/audit.js` (feed cards must fit a phone screen; the article must not overflow sideways). Screenshot a block with `node tools/shot.js --page=deep/<id> --at=<css selector>` and add `--js="…"` to click something first.

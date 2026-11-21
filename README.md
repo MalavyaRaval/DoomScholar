@@ -6,6 +6,7 @@ Learn system design the way you doomscroll: full-screen swipeable cards with mem
 
 - **Feed**: endless vertical scroll through topics (Load Balancers, Redis, Kafka, Design YouTube…). Snap-scrolls one card at a time, like Reels/TikTok.
 - **Card types**: meme formats (classic top/bottom text, "Drake", expanding brain, interviewer chat), concepts, analogies, animated architecture diagrams, comparisons, numbers, code, inline MCQs, TL;DRs.
+- **Deep dives**: long reads for when a meme isn't enough, e.g. *L4 vs L7 Load Balancing*: what's inside a packet, how L4 balancers forward and scale (ECMP, Maglev hashing, DSR), how L7 proxies work, who runs what in production (Google, Meta, Cloudflare, GitHub, AWS, Kubernetes) and how it breaks. They're interactive: a packet-layer inspector, step-through diagrams, tabs, swipeable "in the wild" cards, "diagnose it" prompts and flip flashcards. Each part's summary paragraph also plays in the feed right after the matching topic, so you meet every idea more than once.
 - **Mock interviews**: a full 45-minute *Design a Load Balancer* interview, phase by phase: the interviewer/candidate conversation, working Python code, real NGINX/HAProxy/keepalived configs, diagrams, "go deeper" sections and curveball questions. **Practice mode** hides the model answers until you've said yours out loud, and a **45:00 timer** tells you which phase you should be on.
 - **Quiz tab**: random MCQs by topic or across everything, with explanations, scores, and a "fix my mistakes" mode.
 - **Saved**: double-tap any card (or hit ❤️) to save it for revision.
@@ -75,14 +76,16 @@ Tip: ask Claude to "write a new DoomScholar topic about X following CONTENT_GUID
 ```
 index.html              app shell
 css/style.css           all styling
-js/app.js               feed, topics, quiz, saved, deck import
+js/app.js               feed, topics, quiz, saved, deck import, interview + deep dive views
 js/cards.js             one renderer per card type
 js/diagram.js           JSON → animated SVG architecture diagrams
 js/storage.js           progress / XP / streak in localStorage
 content/manifest.js     list + order of topic files
 content/**/*.js         the topics
 content/interviews/     mock interviews (one folder each, one file per phase)
+content/deep-dives/     deep dives (one file, or one folder with a file per part)
 js/interview.js         renders mock interviews
+js/deepdive.js          renders deep dives (stepper, layers, tabs, carousel, flashcards)
 sw.js                   offline support (network-first cache)
 tools/                  local dev server, validator, phone-size audit, screenshots
 ```

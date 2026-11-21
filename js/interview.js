@@ -12,6 +12,7 @@ window.Interview = (() => {
     haproxy: 'frontend backend mode bind default_backend balance option server check default-server inter rise fall tcp http tcp-check roundrobin leastconn',
     conf: 'vrrp_instance vrrp_script state interface virtual_router_id priority advert_int virtual_ipaddress track_script script interval weight MASTER BACKUP',
     json: 'true false null',
+    yaml: 'true false null',
     http: 'GET POST PUT PATCH DELETE HTTP Host',
     text: '',
   };
@@ -43,7 +44,9 @@ window.Interview = (() => {
       <div class="rv-cover">${cover}</div><div class="rv-body">${inner}</div></div>`;
   }
 
+  // ctx.ext lets another long-form renderer (deep dives) add block types; it also runs inside "deep".
   function block(b, ctx) {
+    if (ctx.ext) { const h = ctx.ext(b, ctx); if (h != null) return h; }
     switch (b.type) {
       case 'say': {
         const me = b.who === 'me';
@@ -138,5 +141,5 @@ window.Interview = (() => {
       </div>`;
   }
 
-  return { render, highlight };
+  return { render, highlight, block, paras };
 })();

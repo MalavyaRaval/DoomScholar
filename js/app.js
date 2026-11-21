@@ -21,18 +21,39 @@
   }
 
   function prepareTopics() {
-    const custom = Store.decks().map((t) => ({ ...t, category: 'Your decks', custom: true }));
-    App.topics = [...(window.TOPICS || []), ...custom]
-      .filter((t) => t && t.id && Array.isArray(t.cards) && t.cards.length)
-      .map((t) => {
-        t.color = HEX.test(t.color || '') ? t.color : '#8b5cf6';
-        t.emoji = t.emoji || '📘';
-        t.category = t.category || 'Topics';
-        t.questions = [];
-        t.cards.forEach((c, i) => { if (c.type === 'quiz') t.questions.push({ ...c, key: `${t.id}#${i}`, t: t.id }); });
-        (t.quiz || []).forEach((q, j) => t.questions.push({ ...q, key: `${t.id}#q${j}`, t: t.id }));
-        return t;
+    // Deep dives first: number every checkpoint quiz (also inside "deep" and "tabs" blocks).
+    App.deeps = (window.DEEPDIVES || []).filter((dd) => dd.id && dd.title && dd.sections && dd.sections.length).map((dd) => {
+      dd.color = HEX.test(dd.color || '') ? dd.color : '#8b5cf6';
+      dd.emoji = dd.emoji || '📖';
+      dd.questions = [];
+      let n = 0;
+      const walk = (blocks) => (blocks || []).forEach((b) => {
+        if (b.type === 'quiz') { b.key = `${dd.id}#${n++}`; dd.questions.push({ ...b, t: dd.id }); }
+        walk(b.blocks);
+        (b.tabs || []).forEach((tb) => walk(tb.blocks));
       });
+      dd.sections.forEach((s) => walk(s.blocks));
+      return dd;
+    });
+    App.ddById = Object.fromEntries(App.deeps.map((dd) => [dd.id, dd]));
+
+    const custom = Store.decks().map((t) => ({ ...t, category: 'Your decks', custom: true }));
+    const base = [...(window.TOPICS || []), ...custom].filter((t) => t && t.id && Array.isArray(t.cards) && t.cards.length);
+    // Each deep dive also becomes a swipeable "deep read" deck that plays right after its related topic.
+    const decks = App.deeps.map(readDeck);
+    App.topics = [
+      ...base.flatMap((t) => [t, ...decks.filter((d) => d.related === t.id)]),
+      ...decks.filter((d) => !base.some((t) => t.id === d.related)),
+    ].map((t) => {
+      t.color = HEX.test(t.color || '') ? t.color : '#8b5cf6';
+      t.emoji = t.emoji || '📘';
+      t.category = t.category || 'Topics';
+      t.questions = [];
+      // Cards with a key re-use a deep dive's question, which already counts there.
+      t.cards.forEach((c, i) => { if (c.type === 'quiz' && !c.key) t.questions.push({ ...c, key: `${t.id}#${i}`, t: t.id }); });
+      (t.quiz || []).forEach((q, j) => t.questions.push({ ...q, key: `${t.id}#q${j}`, t: t.id }));
+      return t;
+    });
     App.byId = Object.fromEntries(App.topics.map((t) => [t.id, t]));
 
     // Mock interviews: number every checkpoint quiz (including ones nested in "Go deeper").
@@ -49,7 +70,24 @@
       return iv;
     });
     App.ivById = Object.fromEntries(App.interviews.map((iv) => [iv.id, iv]));
-    App.src = { ...App.ivById, ...App.byId }; // anything that owns quiz questions
+    App.src = { ...App.ddById, ...App.ivById, ...App.byId }; // anything that owns quiz questions
+  }
+
+  // hook → (paragraph card + that part's first checkpoint quiz) per part → recap.
+  function readDeck(dd) {
+    const cards = [{ type: 'hook', emoji: dd.emoji, title: `Deep read: ${dd.title}`, text: dd.hook || dd.tagline || '' }];
+    dd.sections.forEach((s, i) => {
+      if (!s.card) return;
+      const card = typeof s.card === 'string' ? { text: s.card } : s.card;
+      cards.push({ type: 'read', label: `📖 Part ${i + 1} of ${dd.sections.length}`, emoji: card.emoji, title: card.title || s.title, text: card.text, href: `#/deep/${dd.id}/${s.id}` });
+      const q = (s.blocks || []).find((b) => b.type === 'quiz');
+      if (q) cards.push({ type: 'quiz', q: q.q, options: q.options, answer: q.answer, explain: q.explain, key: q.key });
+    });
+    cards.push({ type: 'tldr', title: 'The recap', points: dd.recap || dd.sections.slice(0, 5).map((s) => s.nav || s.title) });
+    return {
+      id: `read-${dd.id}`, title: dd.title, short: dd.short, emoji: dd.emoji, color: dd.color, tagline: dd.tagline,
+      category: 'Deep Dives', related: dd.related, deep: dd.id, quizId: dd.id, cards,
+    };
   }
 
   function findQuestion(key) {
@@ -75,12 +113,13 @@
   /* ---------------- routing ---------------- */
 
   const TABS = ['feed', 'topics', 'quiz', 'saved'];
-  const VIEWS = [...TABS, 'interview'];
+  const VIEWS = [...TABS, 'interview', 'deep'];
   let currentTab = null;
 
   function route() {
     const parts = location.hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent);
     if (parts[0] === 'interview' && App.ivById[parts[1]]) return show('interview', { id: parts[1] });
+    if (parts[0] === 'deep' && App.ddById[parts[1]]) return show('deep', { id: parts[1], sec: parts[2] });
     let tab = TABS.includes(parts[0]) ? parts[0] : 'feed';
     if (tab === 'feed' && parts[1] && App.byId[parts[1]]) {
       Feed.start(parts[1], +parts[2] || 0);
@@ -95,9 +134,10 @@
   }
 
   function show(tab, opts = {}) {
+    const prev = currentTab;
     currentTab = tab;
     VIEWS.forEach((t) => { $('#view-' + t).hidden = t !== tab; });
-    const navTab = tab === 'interview' ? 'topics' : tab;
+    const navTab = tab === 'interview' || tab === 'deep' ? 'topics' : tab;
     $$('.tabbar a').forEach((a) => a.classList.toggle('on', a.dataset.tab === navTab));
     document.body.dataset.tab = tab;
     if (tab === 'topics') Topics.render();
@@ -105,6 +145,7 @@
     if (tab === 'saved') Saved.render();
     if (tab === 'feed') { Feed.applyScroll(); Feed.refreshSaved(); }
     if (tab === 'interview') IV.open(opts.id);
+    if (tab === 'deep') DD.open(opts.id, opts.sec, prev);
   }
 
   function go(tab, sub) { location.hash = '#/' + tab + (sub ? '/' + encodeURIComponent(sub) : ''); }
@@ -332,7 +373,19 @@
       const s = Store.get();
       const total = App.topics.reduce((a, t) => a + t.cards.length, 0);
       const acc = s.quiz.total ? Math.round((s.quiz.right / s.quiz.total) * 100) + '%' : '–';
-      const cats = [...new Set(App.topics.map((t) => t.category))].filter((c) => c !== 'Your decks');
+      const cats = [...new Set(App.topics.map((t) => t.category))].filter((c) => c !== 'Your decks' && c !== 'Deep Dives');
+      const ddTile = (dd) => {
+        const st = Store.ddState(dd.id);
+        const read = dd.sections.filter((x) => st.read[x.id]).length;
+        return `
+          <a class="tile dd-tile" href="#/deep/${esc(dd.id)}" style="--accent:${dd.color}">
+            <span class="tile-emoji">${esc(dd.emoji)}</span>
+            <span class="tile-t">${esc(dd.title)}</span>
+            <span class="tile-x">${esc(dd.tagline || '')}</span>
+            <span class="bar"><i style="width:${Math.round((read / dd.sections.length) * 100)}%"></i></span>
+            <span class="tile-m">~${DeepDive.totalMinutes(dd)} min · ${read === dd.sections.length ? '✅ read' : `${read}/${dd.sections.length} parts`}</span>
+          </a>`;
+      };
       const tile = (t) => {
         const seen = Store.seenCount(t.id), pct = Math.round((seen / t.cards.length) * 100);
         const best = s.quiz.best[t.id];
@@ -359,6 +412,7 @@
             <button class="btn primary" data-a="continue">▶ Keep scrolling</button>
             <button class="btn ghost" data-a="random">🎲 Surprise me</button>
           </div>
+          ${App.deeps.length ? `<h3 class="sec">📖 Deep dives</h3><p class="sec-x">Long reads with real-world systems, step-throughs and recall cards. Their paragraphs also show up in the feed.</p><div class="tiles">${App.deeps.map(ddTile).join('')}</div>` : ''}
           ${App.interviews.length ? `<h3 class="sec">🎤 Mock interviews</h3><div class="tiles">${App.interviews.map((iv) => {
             const st = Store.ivState(iv.id);
             const done = iv.phases.filter((p) => st.done[p.id]).length;
@@ -433,7 +487,7 @@
     setup() {
       this.s = null;
       const st = Store.get();
-      const withQ = [...App.interviews, ...App.topics].filter((t) => t.questions.length);
+      const withQ = [...App.deeps, ...App.interviews, ...App.topics].filter((t) => t.questions.length);
       const totalQ = withQ.reduce((a, t) => a + t.questions.length, 0);
       const acc = st.quiz.total ? Math.round((st.quiz.right / st.quiz.total) * 100) + '%' : '–';
       const mistakes = st.mistakes.filter(findQuestion).length;
@@ -466,7 +520,7 @@
     start(mode) {
       let pool;
       if (mode === 'mistakes') pool = Store.get().mistakes.map(findQuestion).filter(Boolean);
-      else if (this.sel === 'all' || !App.src[this.sel]) { this.sel = 'all'; pool = [...App.topics, ...App.interviews].flatMap((t) => t.questions); }
+      else if (this.sel === 'all' || !App.src[this.sel]) { this.sel = 'all'; pool = [...App.topics, ...App.interviews, ...App.deeps].flatMap((t) => t.questions); }
       else pool = App.src[this.sel].questions;
       if (!pool.length) { toast('No questions here yet'); return this.setup(); }
       const qs = shuffle(pool).slice(0, mode === 'mistakes' ? 20 : this.count).map((q) => ({ ...q, order: shuffle(q.options.map((_, i) => i)) }));
@@ -597,7 +651,7 @@
       if (act === 'mode') { Store.ivSetMode(iv.id, t.dataset.m); this.render(); toast(t.dataset.m === 'read' ? '👀 All answers shown' : '🙈 Answers hidden: answer first, then tap'); }
       if (act === 'done') {
         const on = Store.ivToggleDone(iv.id, t.dataset.p);
-        if (on) { Store.get().xp += 25; updateStats(true); toast('Phase done +25 XP'); }
+        if (on) { Store.addXp(25); updateStats(true); toast('Phase done +25 XP'); }
         this.render();
       }
       if (act === 'jump') {
@@ -630,6 +684,156 @@
       btn.classList.add('on');
       btn.classList.toggle('late', min >= 45);
       $$('.iv-nav button', this.el).forEach((b) => b.classList.toggle('now', !!ph && b.dataset.p === ph.id));
+    },
+  };
+
+  /* ---------------- deep dive view ---------------- */
+
+  const DD = {
+    id: null, io: null, from: null, raf: 0,
+    get el() { return $('#view-deep'); },
+
+    open(id, sec, from) {
+      const fresh = this.id !== id;
+      this.id = id;
+      if (from !== 'deep' || fresh) this.from = from || null;
+      this.render();
+      if (sec) requestAnimationFrame(() => this.jump(sec, false));
+      else if (fresh) this.el.scrollTop = 0;
+    },
+
+    render() {
+      const dd = App.ddById[this.id];
+      const keep = this.el.scrollTop;
+      const deck = 'read-' + dd.id;
+      this.el.innerHTML = DeepDive.render(dd, Store.ddState(dd.id), {
+        backLabel: { feed: 'Back to feed', quiz: 'Back to quiz', saved: 'Back to saved', deep: 'Back', interview: 'Back' }[this.from] || 'Topics',
+        deck: App.byId[deck] ? deck : null,
+        related: App.byId[dd.related],
+        others: App.deeps,
+      });
+      this.el.scrollTop = keep;
+      this.el.onclick = (e) => this.click(e);
+      this.el.onkeydown = (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-iv="reveal"]')) { e.preventDefault(); this.click(e); } };
+      this.el.onscroll = () => this.onScroll();
+      $$('[data-dd-step]', this.el).forEach((st) => this.step(st, 0));
+      $$('[data-dd-track]', this.el).forEach((tr) => { tr.onscroll = () => this.wildCount(tr); });
+      this.onScroll();
+      // Highlight the part you're reading in the sticky nav and remember it for "Continue".
+      this.io?.disconnect();
+      this.io = new IntersectionObserver((es) => es.forEach((en) => {
+        if (!en.isIntersecting) return;
+        const sid = en.target.dataset.s;
+        Store.ddSetLast(dd.id, sid);
+        const b = $(`.iv-nav [data-s="${CSS.escape(sid)}"]`, this.el);
+        $$('.iv-nav .here', this.el).forEach((x) => x.classList.remove('here'));
+        if (b) {
+          b.classList.add('here');
+          const nav = b.parentElement;
+          nav.scrollTo({ left: b.offsetLeft - nav.clientWidth / 2 + b.offsetWidth / 2, behavior: 'smooth' });
+        }
+      }), { root: this.el, rootMargin: '-35% 0px -60% 0px' });
+      $$('.dd-sec', this.el).forEach((s) => this.io.observe(s));
+    },
+
+    click(e) {
+      const t = e.target.closest('[data-dd], [data-iv]');
+      if (!t) return;
+      const dd = App.ddById[this.id];
+      const act = t.dataset.dd || t.dataset.iv;
+      if (act === 'reveal' && t.classList.contains('hide')) t.classList.remove('hide');
+      else if (act === 'copy') {
+        const code = t.closest('.iv-code').querySelector('code').textContent;
+        navigator.clipboard?.writeText(code).then(() => toast('Code copied 📋'), () => toast('Copy failed'));
+      }
+      else if (act === 'back') { if (this.from) history.back(); else go('topics'); }
+      else if (act === 'jump') this.jump(t.dataset.s);
+      else if (act === 'read') {
+        const on = Store.ddToggleRead(dd.id, t.dataset.s);
+        if (on) { Store.addXp(15); updateStats(true); toast('Part read +15 XP 📖'); buzz(15); }
+        this.syncRead();
+      }
+      else if (act === 'next' || act === 'prev' || act === 'dot') {
+        const st = t.closest('[data-dd-step]'), i = +st.dataset.i, last = $$(':scope > .st-panels > .st-panel', st).length - 1;
+        this.step(st, act === 'dot' ? +t.dataset.k : act === 'prev' ? i - 1 : i === last ? 0 : i + 1);
+      }
+      else if (act === 'view') {
+        const box = t.closest('[data-dd-layers]'), k = +t.dataset.k, sees = t.dataset.sees.split(',');
+        $$('.ly-views button', box).forEach((b, j) => b.classList.toggle('on', j === k));
+        $$('.ly-text', box).forEach((x, j) => x.classList.toggle('on', j === k));
+        $$('.ly-box', box).forEach((l) => l.classList.toggle('hid', !sees.includes(l.dataset.tag)));
+      }
+      else if (act === 'tab') {
+        const box = t.closest('[data-dd-tabs]'), k = +t.dataset.k;
+        $$(':scope > .tb-bar button', box).forEach((b, j) => b.classList.toggle('on', j === k));
+        $$(':scope > .tb-panel', box).forEach((p, j) => p.classList.toggle('on', j === k));
+      }
+      else if (act === 'flip') {
+        t.classList.toggle('flipped');
+        const box = t.closest('[data-dd-flash]');
+        $('.fl-n', box).textContent = $$('.fl-card.flipped', box).length;
+      }
+      else if (act === 'wild') {
+        const tr = $('[data-dd-track]', t.closest('.dd-wild'));
+        const w = (tr.firstElementChild?.offsetWidth || 280) + 12;
+        tr.scrollBy({ left: +t.dataset.k * w, behavior: 'smooth' });
+      }
+    },
+
+    // Show step k of a stepper; dim everything in the shared diagram except that step's focus ids.
+    step(st, k) {
+      const panels = $$(':scope > .st-panels > .st-panel', st);
+      k = Math.max(0, Math.min(panels.length - 1, k));
+      st.dataset.i = k;
+      panels.forEach((p, j) => p.classList.toggle('on', j === k));
+      $$(':scope > .st-ctrl .st-dots button', st).forEach((d, j) => d.classList.toggle('on', j === k));
+      $(':scope > .st-head .st-count', st).textContent = `${k + 1} / ${panels.length}`;
+      $(':scope > .st-ctrl [data-dd="prev"]', st).disabled = k === 0;
+      $(':scope > .st-ctrl [data-dd="next"]', st).textContent = k === panels.length - 1 ? '↺ Again' : 'Next →';
+      const dia = $(':scope > .st-dia', st);
+      if (!dia) return;
+      const p = panels[k];
+      dia.classList.toggle('off', !!p.dataset.own);
+      const focus = (p.dataset.focus || '').split(',').filter(Boolean);
+      const svg = $('svg', dia);
+      svg.classList.toggle('focusing', focus.length > 0);
+      $$('[data-id], [data-e]', svg).forEach((n) => n.classList.toggle('on', focus.includes(n.dataset.id || n.dataset.e)));
+    },
+
+    wildCount(tr) {
+      const w = (tr.firstElementChild?.offsetWidth || 1) + 12;
+      const n = Math.min(tr.children.length, Math.round(tr.scrollLeft / w) + 1);
+      const el = $('.wild-n', tr.parentElement);
+      if (el) el.textContent = n;
+    },
+
+    // Update read state in place, so steppers, flipped cards and open sections keep their state.
+    syncRead() {
+      const dd = App.ddById[this.id], st = Store.ddState(dd.id);
+      const n = dd.sections.filter((s) => st.read[s.id]).length;
+      $$('[data-dd="read"]', this.el).forEach((b) => {
+        const on = !!st.read[b.dataset.s];
+        b.classList.toggle('primary', !on); b.classList.toggle('ghost', on);
+        b.textContent = on ? '✅ Read (tap to undo)' : 'Mark as read ✓ +15 XP';
+      });
+      $$('.iv-nav [data-dd="jump"]', this.el).forEach((b) => b.classList.toggle('done', !!st.read[b.dataset.s]));
+      $('.iv-hero .bar i', this.el).style.width = Math.round((n / dd.sections.length) * 100) + '%';
+      $('.iv-hero .tile-m', this.el).textContent = `${n}/${dd.sections.length} parts read · ${dd.questions.length} checkpoint questions`;
+    },
+
+    jump(sid, smooth = true) {
+      const sec = $(`#sec-${CSS.escape(sid)}`, this.el), bar = $('.dd-bar', this.el);
+      if (!sec || !bar) return;
+      const stuckBottom = (parseFloat(getComputedStyle(bar).top) || 0) + bar.offsetHeight;
+      this.el.scrollTo({ top: sec.offsetTop - stuckBottom - 6, behavior: smooth ? 'smooth' : 'auto' });
+    },
+
+    onScroll() {
+      cancelAnimationFrame(this.raf);
+      this.raf = requestAnimationFrame(() => {
+        const el = this.el, max = el.scrollHeight - el.clientHeight, bar = $('.dd-prog i', el);
+        if (bar) bar.style.width = (max > 0 ? Math.min(100, (el.scrollTop / max) * 100) : 0).toFixed(1) + '%';
+      });
     },
   };
 
@@ -787,6 +991,20 @@ TOPIC: `;
       const edge = page.getBoundingClientRect().right;
       const wide = $$('*', page).filter((n) => !n.closest('pre, .tbl-scroll, .iv-nav') && n.getBoundingClientRect().right > edge + 1);
       out.interviews.push({ id: iv.id, overflowPx: page.scrollWidth - page.clientWidth, offenders: wide.slice(0, 5).map((n) => `${n.tagName.toLowerCase()}.${n.className}: ${n.textContent.slice(0, 40)}`) });
+      page.remove();
+    }
+    // Deep dives: same sideways check, with every tab, step and flashcard back made visible.
+    out.deeps = [];
+    for (const dd of App.deeps) {
+      const page = document.createElement('section');
+      page.className = 'view page iv-page dd-page dd-audit';
+      page.style.cssText = 'position:fixed;inset:0;max-width:480px';
+      document.body.appendChild(page);
+      page.innerHTML = DeepDive.render(dd, { read: {}, last: null }, { others: App.deeps, deck: 'x', related: App.byId[dd.related] });
+      $$('details', page).forEach((d) => { d.open = true; });
+      const edge = page.getBoundingClientRect().right;
+      const wide = $$('*', page).filter((n) => !n.closest('pre, .tbl-scroll, .iv-nav, .wild-track, .tb-bar') && n.getBoundingClientRect().right > edge + 1);
+      out.deeps.push({ id: dd.id, overflowPx: page.scrollWidth - page.clientWidth, offenders: wide.slice(0, 5).map((n) => `${n.tagName.toLowerCase()}.${n.className}: ${n.textContent.slice(0, 40)}`) });
       page.remove();
     }
     const pre = document.createElement('pre');

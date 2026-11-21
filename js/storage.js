@@ -14,6 +14,7 @@ window.Store = (() => {
     streak: { count: 0, last: null },
     lastPos: null,     // { t, i }
     iv: {},            // mock interviews: { id: { done: { phaseId: 1 }, mode: 'practice' | 'read' } }
+    dd: {},            // deep dives: { id: { read: { sectionId: 1 }, last: sectionId } }
   });
 
   let d = load();
@@ -106,6 +107,17 @@ window.Store = (() => {
       if (st.done[phase]) delete st.done[phase]; else { st.done[phase] = 1; touchStreak(); }
       save();
       return !!st.done[phase];
+    },
+
+    addXp(n) { d.xp += n; touchStreak(); save(); },
+
+    ddState(id) { const s = (d.dd ||= {}); return (s[id] ||= { read: {}, last: null }); },
+    ddSetLast(id, sec) { const st = this.ddState(id); if (st.last !== sec) { st.last = sec; save(); } },
+    ddToggleRead(id, sec) {
+      const st = this.ddState(id);
+      if (st.read[sec]) delete st.read[sec]; else { st.read[sec] = 1; touchStreak(); }
+      save();
+      return !!st.read[sec];
     },
 
     // Imported decks are stored separately so they survive a progress reset.

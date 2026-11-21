@@ -25,9 +25,18 @@ const { launch } = require('./chrome');
     await chrome.goto(base);
     await chrome.waitFor('!!document.querySelector("#view-feed .card")');
     if (pageTab) {
+      // --at=<css selector> scrolls that element to the top; --js=<code> runs first (e.g. a click).
+      const at = opt('at', ''), js = args.find((a) => a.startsWith('--js='))?.slice(5) || '';
       await chrome.eval(`location.hash = '#/${pageTab}'`);
       await chrome.sleep(900);
-      const file = path.join(outDir, `page-${pageTab}.png`);
+      if (js) { await chrome.eval(js); await chrome.sleep(500); }
+      if (at) {
+        await chrome.eval(`(() => { const el = document.querySelector(${JSON.stringify(at)}); const v = el && el.closest('.view');
+          if (v) v.scrollTop = el.getBoundingClientRect().top - v.getBoundingClientRect().top + v.scrollTop - 120; })()`);
+        await chrome.sleep(700);
+      }
+      const name = (pageTab + (at ? '-' + at : '')).replace(/[^\w-]+/g, '_');
+      const file = path.join(outDir, `page-${name}.png`);
       await chrome.screenshot(file);
       console.log(file);
       return;

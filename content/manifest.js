@@ -43,4 +43,22 @@ window.CONTENT_FILES = [
   'interviews/design-load-balancer/09-wrap-up.js',
   'interviews/design-load-balancer/10-curveballs.js',
   'interviews/design-load-balancer/11-cheatsheet.js',
+
+  // Deep dives (long-form reading). A deep dive is one file, or a folder with one file per part.
+  // Each part's card paragraph also plays in the feed, right after the deep dive's related topic.
+  'deep-dives/l4-vs-l7/00-intro.js',
+  'deep-dives/l4-vs-l7/01-packets.js',
+  'deep-dives/l4-vs-l7/02-l4.js',
+  'deep-dives/l4-vs-l7/03-l4-scale.js',
+  'deep-dives/l4-vs-l7/04-l7.js',
+  'deep-dives/l4-vs-l7/05-tradeoffs.js',
+  'deep-dives/l4-vs-l7/06-in-the-wild.js',
+  'deep-dives/l4-vs-l7/07-full-stack.js',
+  'deep-dives/l4-vs-l7/08-failures.js',
+  'deep-dives/l4-vs-l7/09-recap.js',
+  'deep-dives/caching-in-depth.js',
+  'deep-dives/edge-in-depth.js',
+  'deep-dives/storage-engines.js',
+  'deep-dives/hashing-in-depth.js',
+  'deep-dives/kafka-in-depth.js',
 ];

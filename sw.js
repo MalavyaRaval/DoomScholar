@@ -3,11 +3,11 @@
  * falling back to the cached copy when offline or when the network takes longer than 2.5s.
  * Bump VERSION if you ever need to force-clear old caches.
  */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'doomscholar-' + VERSION;
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest',
-  'js/storage.js', 'js/diagram.js', 'js/cards.js', 'js/interview.js', 'js/app.js',
+  'js/storage.js', 'js/diagram.js', 'js/cards.js', 'js/interview.js', 'js/deepdive.js', 'js/app.js',
   'content/registry.js', 'content/manifest.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];

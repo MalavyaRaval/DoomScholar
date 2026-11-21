@@ -114,7 +114,7 @@
     ls.forEach((l, i) => {
       inner += `<text class="n-label" x="${r1(b.cx)}" y="${r1(top + iconH + LH / 2 + i * LH)}">${esc(l)}</text>`;
     });
-    return `<g class="node${tone}">${shape}${inner}</g>`;
+    return `<g class="node${tone}" data-id="${esc(n.id)}">${shape}${inner}</g>`;
   }
 
   function render(spec) {
@@ -129,7 +129,7 @@
     L.edges.forEach(({ e, g, missing }) => {
       if (missing) return;
       const cls = 'edge' + (e.dashed ? ' dashed' : '') + (e.tone ? ' tone-' + esc(e.tone) : '');
-      s += `<g class="${cls}"><path class="e-line" d="${g.d}"/>`;
+      s += `<g class="${cls}" data-e="${esc(e.from + '>' + e.to)}"><path class="e-line" d="${g.d}"/>`;
       if (e.arrow !== false) s += arrowHead(g.p2, g.endDir);
       if (e.bi) s += arrowHead(g.p1, g.startDir);
       if (e.flow) {
@@ -144,7 +144,7 @@
 
     L.edges.forEach(({ e, lb }) => {
       if (!lb) return;
-      s += `<g class="e-label"><rect x="${r1(lb.x)}" y="${r1(lb.y)}" width="${lb.w}" height="${lb.h}" rx="9"/>` +
+      s += `<g class="e-label" data-e="${esc(e.from + '>' + e.to)}"><rect x="${r1(lb.x)}" y="${r1(lb.y)}" width="${lb.w}" height="${lb.h}" rx="9"/>` +
         `<text x="${r1(lb.x + lb.w / 2)}" y="${r1(lb.y + lb.h / 2)}">${esc(e.label)}</text></g>`;
     });
 

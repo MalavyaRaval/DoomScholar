@@ -31,6 +31,7 @@ const RULES = {
   code: { req: ['code'], lim: (c, w) => { const ls = c.code.split('\n'); w(ls.length > 13, '> 13 lines'); ls.forEach((l, i) => w(l.length > 40, `line ${i} > 40 chars`)); } },
   tip: { req: ['text'], lim: (c, w) => { w(words(c.text) > 38, 'text > 38 words'); } },
   quiz: { req: ['q', 'options', 'explain'], lim: (c, w) => { w(chars(c.q) > 140, 'question > 140 chars'); c.options.forEach((o, i) => w(chars(o) > 70, `option ${i} > 70 chars`)); w(words(c.explain) > 40, 'explain > 40 words'); } },
+  read: { req: ['title', 'text'], lim: (c, w) => { w(words(c.text) > 105, 'text > 105 words (must fit one screen)'); } },
   tldr: { req: ['points'], lim: (c, w) => { w(c.points.length > 5, '> 5 points'); c.points.forEach((p, i) => w(words(p) > 16, `point ${i} > 16 words`)); } },
 };
 
@@ -48,10 +49,107 @@ function load() {
     ctx.__file = f;
     vm.runInContext(fs.readFileSync(p, 'utf8'), ctx, { filename: p });
   }
-  return { topics: ctx.TOPICS, interviews: ctx.INTERVIEWS || [], missing };
+  return { topics: ctx.TOPICS, interviews: ctx.INTERVIEWS || [], deeps: ctx.DEEPDIVES || [], missing };
 }
 
 const IV_BLOCKS = ['say', 'think', 'text', 'list', 'table', 'code', 'diagram', 'callout', 'quiz', 'yourturn', 'deep'];
+const DD_BLOCKS = [...IV_BLOCKS, 'wild', 'stepper', 'layers', 'tabs', 'flashcards', 'stats'];
+
+// Structural checks for long-form blocks (no one-screen limits). Recurses into deep and tabs.
+function walkBlocks(blocks, where, o) {
+  const { err, warn, answers, allowed } = o;
+  (blocks || []).forEach((b, bi) => {
+    const wb = `${where} › ${bi} (${b.type})`;
+    if (!allowed.includes(b.type)) return err(`${wb}: unknown block type. Allowed: ${allowed.join(', ')}`);
+    if (b.type === 'say' && (!['me', 'them'].includes(b.who) || !b.text)) err(`${wb}: needs who: 'me'|'them' and text`);
+    if ((b.type === 'think' || b.type === 'callout') && !b.text) err(`${wb}: missing text`);
+    if (b.type === 'text' && !(b.md || b.text)) err(`${wb}: missing md`);
+    if (b.type === 'list' && !(b.items || []).length) err(`${wb}: empty items`);
+    if (b.type === 'table') {
+      const n = (b.head || []).length;
+      if (!n) err(`${wb}: missing head`);
+      (b.rows || []).forEach((r, ri) => { if (r.length !== n) err(`${wb}: row ${ri} has ${r.length} cells but the header has ${n}`); });
+    }
+    if (b.type === 'code') { if (!b.code) err(`${wb}: missing code`); if (!b.lang) warn(`${wb}: no lang (no highlighting)`); }
+    if (b.type === 'diagram') Diagram.check(b.diagram).forEach((m) => err(`${wb}: ${m}`));
+    if (b.type === 'quiz') { checkQuestion(b, wb, err); answers.push(b.answer); }
+    if (b.type === 'yourturn' && (!b.prompt || !b.answer)) err(`${wb}: needs prompt and answer`);
+    if (b.type === 'deep') walkBlocks(b.blocks, wb, o);
+    if (b.type === 'wild') {
+      if (!(b.items || []).length) err(`${wb}: empty items`);
+      (b.items || []).forEach((it, i) => { if (!it.who || !it.text) err(`${wb}: item ${i} needs who and text`); });
+    }
+    if (b.type === 'stepper') {
+      if ((b.steps || []).length < 2) err(`${wb}: needs 2+ steps`);
+      const ids = new Set();
+      if (b.diagram) {
+        Diagram.check(b.diagram).forEach((m) => err(`${wb}: ${m}`));
+        (b.diagram.nodes || []).forEach((n) => ids.add(n.id));
+        (b.diagram.edges || []).forEach((e) => ids.add(`${e.from}>${e.to}`));
+      }
+      (b.steps || []).forEach((st, i) => {
+        if (!st.title || !st.text) err(`${wb}: step ${i} needs title and text`);
+        if (st.diagram) Diagram.check(st.diagram).forEach((m) => err(`${wb}: step ${i}: ${m}`));
+        (st.focus || []).forEach((f) => { if (!ids.has(f)) err(`${wb}: step ${i} focus "${f}" is not a node id or "from>to" edge of the shared diagram`); });
+      });
+    }
+    if (b.type === 'layers') {
+      const tags = new Set((b.layers || []).map((l) => l.tag));
+      if (!(b.layers || []).length) err(`${wb}: empty layers`);
+      (b.layers || []).forEach((l, i) => { if (!l.tag || !l.name) err(`${wb}: layer ${i} needs tag and name`); });
+      (b.views || []).forEach((v, i) => {
+        if (!v.label || !v.text || !Array.isArray(v.sees)) err(`${wb}: view ${i} needs label, sees[] and text`);
+        (v.sees || []).forEach((t) => { if (!tags.has(t)) err(`${wb}: view ${i} sees unknown layer tag "${t}"`); });
+      });
+    }
+    if (b.type === 'tabs') {
+      if ((b.tabs || []).length < 2) err(`${wb}: needs 2+ tabs`);
+      (b.tabs || []).forEach((t, i) => { if (!t.label) err(`${wb}: tab ${i} needs a label`); walkBlocks(t.blocks, `${wb} › tab ${i}`, o); });
+    }
+    if (b.type === 'flashcards') {
+      if ((b.cards || []).length < 2) err(`${wb}: needs 2+ cards`);
+      (b.cards || []).forEach((c, i) => { if (!c.q || !c.a) err(`${wb}: card ${i} needs q and a`); });
+    }
+    if (b.type === 'stats') {
+      if (!(b.stats || []).length) err(`${wb}: empty stats`);
+      (b.stats || []).forEach((st, i) => { if (chars(st.value) > 9) warn(`${wb}: stat ${i} value > 9 chars`); });
+    }
+    if (!['deep', 'code', 'tabs', 'stepper'].includes(b.type) && (JSON.stringify(b).match(/\*\*/g) || []).length % 2) warn(`${wb}: unbalanced ** markup`);
+  });
+}
+
+// Deep dives: meta + sections. Each section's card is the paragraph that plays in the feed.
+function checkDeep(dd, takenIds) {
+  const E = [], W = [];
+  const err = (m) => E.push(m), warn = (m) => W.push(m);
+  ['title', 'tagline', 'intro'].forEach((k) => { if (!dd[k]) err(`missing ${k}`); });
+  if (!/^[a-z0-9-]+$/.test(dd.id)) err(`id "${dd.id}" must be kebab-case`);
+  if (takenIds.has(dd.id)) err(`id "${dd.id}" collides with a topic or interview id`);
+  if (takenIds.has('read-' + dd.id)) err(`a topic is already called "read-${dd.id}" (the feed deck id)`);
+  if (dd.related && !takenIds.has(dd.related)) warn(`related topic "${dd.related}" not found`);
+  if (!/^#[0-9a-f]{6}$/i.test(dd.color || '')) err(`color "${dd.color}" must be a 6-digit hex`);
+  if ((dd.short || dd.title || '').length > 18) warn(`title is long for the footer chip; add short: '...' (≤ 18 chars)`);
+  if (words(dd.hook || dd.tagline) > 30) warn('hook > 30 words');
+  if (!Array.isArray(dd.recap) || dd.recap.length < 3 || dd.recap.length > 5) warn('recap should be 3-5 points (the feed deck ends with it)');
+  (dd.recap || []).forEach((p, i) => { if (words(p) > 16) warn(`recap point ${i} > 16 words`); });
+  if (!dd.sections.length) err('no sections');
+  const answers = [], ids = new Set();
+  dd.sections.forEach((s, si) => {
+    const where = `part ${si + 1} (${s.id})`;
+    if (!s.id || !s.title) err(`${where}: needs id and title`);
+    if (ids.has(s.id)) err(`${where}: duplicate section id`);
+    ids.add(s.id);
+    if (!s.nav) warn(`${where}: no nav (short chip label)`);
+    else if (s.nav.length > 24) warn(`${where}: nav > 24 chars`);
+    const card = typeof s.card === 'string' ? { text: s.card } : s.card;
+    if (!card || !card.text) warn(`${where}: no card.text, so this part has no paragraph in the feed`);
+    else if (words(card.text) > 105) warn(`${where}: card.text is ${words(card.text)} words (max ~100, it must fit one screen)`);
+    if (!(s.blocks || []).some((b) => b.type === 'quiz')) warn(`${where}: no top-level quiz (the feed deck shows the first one after the card)`);
+    walkBlocks(s.blocks, where, { err, warn, answers, allowed: DD_BLOCKS });
+  });
+  if (answers.length >= 4 && new Set(answers).size === 1) warn(`every checkpoint answer is option ${answers[0]}; vary the position`);
+  return { E, W, questions: answers.length };
+}
 
 // Mock interviews are long-form, so there are no one-screen limits, just structural checks.
 function checkInterview(iv, topicIds) {
@@ -75,26 +173,7 @@ function checkInterview(iv, topicIds) {
       if (p.start < lastEnd) W.push(`${where}: starts before the previous phase ends`);
       lastEnd = p.end;
     }
-    const walk = (blocks, w) => (blocks || []).forEach((b, bi) => {
-      const wb = `${w} › ${bi} (${b.type})`;
-      if (!IV_BLOCKS.includes(b.type)) return err(`${wb}: unknown block type. Allowed: ${IV_BLOCKS.join(', ')}`);
-      if (b.type === 'say' && (!['me', 'them'].includes(b.who) || !b.text)) err(`${wb}: needs who: 'me'|'them' and text`);
-      if ((b.type === 'think' || b.type === 'callout') && !b.text) err(`${wb}: missing text`);
-      if (b.type === 'text' && !(b.md || b.text)) err(`${wb}: missing md`);
-      if (b.type === 'list' && !(b.items || []).length) err(`${wb}: empty items`);
-      if (b.type === 'table') {
-        const n = (b.head || []).length;
-        if (!n) err(`${wb}: missing head`);
-        (b.rows || []).forEach((r, ri) => { if (r.length !== n) err(`${wb}: row ${ri} has ${r.length} cells but the header has ${n}`); });
-      }
-      if (b.type === 'code') { if (!b.code) err(`${wb}: missing code`); if (!b.lang) W.push(`${wb}: no lang (no highlighting)`); }
-      if (b.type === 'diagram') Diagram.check(b.diagram).forEach((m) => err(`${wb}: ${m}`));
-      if (b.type === 'quiz') { checkQuestion(b, wb, err); answers.push(b.answer); }
-      if (b.type === 'yourturn' && (!b.prompt || !b.answer)) err(`${wb}: needs prompt and answer`);
-      if (b.type === 'deep') walk(b.blocks, wb);
-      if (b.type !== 'deep' && b.type !== 'code' && (JSON.stringify(b).match(/\*\*/g) || []).length % 2) W.push(`${wb}: unbalanced ** markup`);
-    });
-    walk(p.blocks, where);
+    walkBlocks(p.blocks, where, { err, warn: (m) => W.push(m), answers, allowed: IV_BLOCKS });
   });
   if (answers.length >= 4 && new Set(answers).size === 1) W.push(`every checkpoint answer is option ${answers[0]}; vary the position`);
   return { E, W, questions: answers.length };
@@ -109,7 +188,7 @@ function checkQuestion(q, where, err) {
 
 function main() {
   const only = process.argv.slice(2);
-  const { topics, interviews, missing } = load();
+  const { topics, interviews, deeps, missing } = load();
   let errors = 0, warnings = 0;
   const ids = new Set();
   missing.forEach((f) => { console.log(`⚠ manifest lists ${f} but the file doesn't exist yet`); warnings++; });
@@ -167,6 +246,17 @@ function main() {
     if (only.length && !only.includes(iv.id)) continue;
     const { E, W, questions } = checkInterview(iv, topicIds);
     console.log(`${E.length ? '✖' : W.length ? '⚠' : '✔'} 🎤 ${iv.id} (${iv.phases.length} phases, ${questions} checkpoint questions)`);
+    E.forEach((m) => console.log(`    ERROR  ${m}`));
+    W.forEach((m) => console.log(`    warn   ${m}`));
+    errors += E.length; warnings += W.length;
+  }
+
+  const taken = new Set([...topicIds, ...interviews.map((iv) => iv.id)]);
+  for (const dd of deeps) {
+    if (only.length && !only.includes(dd.id)) continue;
+    const { E, W, questions } = checkDeep(dd, taken);
+    const mins = Math.round(words(JSON.stringify(dd.sections.map((s) => s.blocks))) / 210);
+    console.log(`${E.length ? '✖' : W.length ? '⚠' : '✔'} 📖 ${dd.id} (${dd.sections.length} parts, ~${mins} min, ${questions} checkpoint questions)`);
     E.forEach((m) => console.log(`    ERROR  ${m}`));
     W.forEach((m) => console.log(`    warn   ${m}`));
     errors += E.length; warnings += W.length;
